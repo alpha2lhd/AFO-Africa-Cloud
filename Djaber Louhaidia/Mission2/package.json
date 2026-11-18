@@ -1,9 +1,0 @@
-{
-  "name": "africacloud-platform",
-  "version": "1.0.0",
-  "description": "AfricaCloud - Web Interface, REST API & Database (African Skills Olympics 2026)",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
-  }
-}
