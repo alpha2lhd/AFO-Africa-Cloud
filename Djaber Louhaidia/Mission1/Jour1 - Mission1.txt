@@ -26,14 +26,14 @@ Liste des livrables attendus:
 ----------------------------------------------------------------------
 Segmentation en 3 sous-réseaux sous VMWare (Masque /24 - 255.255.255.0) :
 - VLAN 11 / VMnet11 (Gestion & Accès) : 41.69.31.0/24   (Passerelle : 41.69.31.1)
-- VLAN 12 / VMnet12 (Applicatif)      : 69.41.31.0/24   (Passerelle : 69.41.31.1)
-- VLAN 13 / VMnet13 (Données / BDD)   : 31.69.41.0/24   (Passerelle : 31.69.41.1)
+- VLAN 22 / VMnet22 (Applicatif)      : 69.41.31.0/24   (Passerelle : 69.41.31.1)
+- VLAN 33 / VMnet33 (Données / BDD)   : 31.69.41.0/24   (Passerelle : 31.69.41.1)
 
 Adresses IP des VMs :
-- VM1 (Noeud de controle)      : 41.69.31.10 (VLAN 11) / 69.41.31.10 (VLAN 12)
-- VM2 (Noeud Applicatif 1)     : 69.41.31.11 (VLAN 12) / 31.69.41.11 (VLAN 13)
-- VM3 (Noeud Applicatif 2)     : 69.41.31.12 (VLAN 12) / 31.69.41.12 (VLAN 13)
-- VM4 (Serveur BDD)            : 31.69.41.20 (VLAN 13)
+- VM1 (Noeud de controle)      : 41.69.31.10 (VLAN 11) / 69.41.31.10 (VLAN 22)
+- VM2 (Noeud Applicatif 1)     : 69.41.31.11 (VLAN 22) / 31.69.41.11 (VLAN 33)
+- VM3 (Noeud Applicatif 2)     : 69.41.31.12 (VLAN 22) / 31.69.41.12 (VLAN 33)
+- VM4 (Serveur BDD)            : 31.69.41.20 (VLAN 33)
 - VM5 (Supervision/Sauvegarde) : 41.69.31.50 (VLAN 11)
 
 
@@ -71,13 +71,19 @@ Sauvegarde:
 5. TABLEAU DES RESSOURCES:
 ----------------------------------------------------------------------
 
--------------------------------------------------------------------------------------------------------
-|  VM  | Role                                          |  vCPU | RAM  | Stockage |    Réseau VMware   |
-| -----|-----------------------------------------------|-------|------|----------|--------------------|
-|  VM1 | Noeud de Controle Cloud & Serveur de gestion  |   2   | 4 Go |   40 Go  | VLAN 11, 12, 13    |
-|  VM2 | Noeud Applicatif 1                            |   2   | 2 Go |   40 Go  | VLAN 12, 13        |
-|  VM3 | Noeud Applicatif 2                            |   2   | 2 Go |   40 Go  | VLAN 12, 13        |
-|  VM4 | Serveur BDD                                   |   2   | 4 Go |   40 Go  | VLAN 13            |
-|  VM5 | Supervision et sauvegarde                     |   2   | 2 Go |   40 Go  | VLAN 11            |
--------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------
+|  VM  | Role                                          |  vCPU | RAM  | Stockage | Réseau VMware  |
+| -----|-----------------------------------------------|-------|------|----------|----------------|
+|  VM1 | Noeud de Controle Cloud & Serveur de gestion  |   2   | 4 Go |   40 Go  | VLAN 11, 22    |
+|  VM2 | Noeud Applicatif 1                            |   2   | 2 Go |   30 Go  | VLAN 22, 33    |
+|  VM3 | Noeud Applicatif 2                            |   2   | 2 Go |   30 Go  | VLAN 22, 33    |
+|  VM4 | Serveur BDD                                   |   2   | 4 Go |   60 Go  | VLAN 33        |
+|  VM5 | Supervision et sauvegarde                     |   2   | 2 Go |   80 Go  | VLAN 11        |
+---------------------------------------------------------------------------------------------------
 
+Machines et adresses (VMnet11/12/13 = VLAN 11/22/33) :
+- VM1 ctrl-proxy  : 41.69.31.10 / 69.41.31.10 / 31.69.41.10 (NAT 192.168.38.101)
+- VM2 app1        : 69.41.31.11 / 31.69.41.11               (NAT 192.168.38.102)
+- VM3 app2        : 69.41.31.12 / 31.69.41.12               (NAT 192.168.38.103)
+- VM4 db          : 31.69.41.20                             (NAT 192.168.38.104)
+- VM5 backup-sup  : 41.69.31.50                             (NAT 192.168.38.105)
