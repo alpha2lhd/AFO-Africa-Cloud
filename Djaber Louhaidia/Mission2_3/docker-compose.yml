@@ -1,0 +1,34 @@
+# ==============================================================================
+# AfricaCloud - Docker Compose (Haute Disponibilité & Redémarrage Automatique)
+# African Skills Olympics 2026
+# ==============================================================================
+version: "3.8"
+
+services:
+  africacloud-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: africacloud-incidents:1.0
+    container_name: africacloud-app
+    # Redémarrage automatique en cas de crash (Stratégie de Disponibilité)
+    restart: always
+    ports:
+      - "8080:8080"
+      - "80:80"
+      - "3000:3000"
+    environment:
+      - NODE_NAME=${NODE_NAME:-VM2 app1 : 69.41.31.11 / 31.69.41.11 (NAT 192.168.38.102)}
+    volumes:
+      - ./africacloud.db:/app/africacloud.db
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/health')"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+    networks:
+      - africacloud-net
+
+networks:
+  africacloud-net:
+    driver: bridge
