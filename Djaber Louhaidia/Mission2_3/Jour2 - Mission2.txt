@@ -1,0 +1,143 @@
+MISSION 2 - MISE EN PLACE DE L'INFRASTRUCTURE CLOUD
+REPONSES AUX TESTS ATTENDUS
+=====================================================================
+
+Environnement : VMware Workstation, Ubuntu Server 24.04 LTS (5 VM)
+
+  VM1 ctrl-proxy : 41.69.31.10 / 69.41.31.10 / 31.69.41.10  (NAT 192.168.38.101)
+  VM2 app1       : 69.41.31.11 / 31.69.41.11                (NAT 192.168.38.102)
+  VM3 app2       : 69.41.31.12 / 31.69.41.12                (NAT 192.168.38.103)
+  VM4 db         : 31.69.41.20                              (NAT 192.168.38.104)
+  VM5 backup-sup : 41.69.31.50                              (NAT 192.168.38.105)
+
+Reseaux : VMnet11 (VLAN 11, 41.69.31.0/24), VMnet12 (VLAN 22,
+69.41.31.0/24), VMnet13 (VLAN 33, 31.69.41.0/24).
+
+=====================================================================
+TEST 1 - VERIFICATION DE LA CONNECTIVITE IP
+=====================================================================
+
+TESTER
+  ping -c 2 <IP destination>
+
+  Source -> Destination        Commande
+  VM1..VM5 -> Internet         ping -c 2 8.8.8.8
+  VM5 -> VM4                   ping -c 2 31.69.41.20
+  VM5 -> VM2                   ping -c 2 69.41.31.11
+  VM2 -> VM4                   ping -c 2 31.69.41.20
+  VM2 -> VM3                   ping -c 2 69.41.31.12
+  VM1 -> VM5                   ping -c 2 41.69.31.50
+
+=====================================================================
+TEST 2 - VERIFICATION DE LA RESOLUTION DNS
+=====================================================================
+
+REPONSE
+Un service DNS (dnsmasq) est deploye sur VM1. Il ecoute sur ses 3
+adresses (41.69.31.10, 69.41.31.10, 31.69.41.10) et gere la zone
+lab.local :
+
+  ctrl-proxy.lab.local -> 41.69.31.10
+  app1.lab.local       -> 69.41.31.11
+  app2.lab.local       -> 69.41.31.12
+  db.lab.local         -> 31.69.41.20
+  backup-sup.lab.local -> 41.69.31.50
+
+Les autres noms sont transmis a 8.8.8.8. Le port 53 est autorise dans
+UFW depuis les 3 sous-reseaux.
+
+COMMENT TESTER
+  Depuis VM2 :  nslookup db.lab.local 69.41.31.10
+  Depuis VM5 :  nslookup app1.lab.local 41.69.31.10
+  Depuis VM4 :  nslookup app2.lab.local 31.69.41.10
+Resultat attendu : l'adresse IP correspondante dans la reponse.
+Etat du service sur VM1 : systemctl is-active dnsmasq  (attendu : active)
+
+RESULTAT : OK, la resolution fonctionne.
+
+=====================================================================
+TEST 3 - VERIFICATION DES REGLES DE FILTRAGE
+=====================================================================
+
+REPONSE
+Le pare-feu UFW est actif sur les 5 VM avec la politique "deny incoming"
+(tout est bloque sauf ce qui est autorise explicitement) :
+
+  VM1 : SSH, 80/tcp, 443/tcp, 53 (depuis les 3 sous-reseaux)
+  VM2 et VM3 : SSH, 8080/tcp uniquement depuis VM1 (69.41.31.10)
+  VM4 : SSH, 5432/tcp uniquement depuis VM2 (31.69.41.11) et VM3 (31.69.41.12)
+  VM5 : SSH, 9090 et 3000/tcp uniquement depuis VM1 (41.69.31.10)
+
+Principe : seul le proxy (VM1) atteint les applications, seules les
+applications atteignent la base de donnees.
+
+COMMENT TESTER
+1. Afficher les regles sur chaque VM :
+     sudo ufw status verbose
+2. Ouvrir un port d'ecoute temporaire :
+     VM4 : nc -l 5432      VM2 : nc -l 8080
+3. Test BLOQUE (depuis VM5), attendu : timeout
+     nc -zv -w 3 31.69.41.20 5432
+     nc -zv -w 3 69.41.31.11 8080
+4. Test AUTORISE, attendu : succeeded
+     Depuis VM2 :  nc -zv -w 3 31.69.41.20 5432
+     Depuis VM1 :  nc -zv -w 3 69.41.31.11 8080
+
+A retenir : "timeout" = paquet bloque par le pare-feu ; "refused" =
+paquet autorise mais aucun service n'ecoute.
+
+RESULTAT : regles appliquees sur les 5 VM.
+
+=====================================================================
+TEST 4 - VERIFICATION DU FONCTIONNEMENT DES SERVICES HEBERGES
+=====================================================================
+
+REPONSE
+  - VM2 et VM3 : serveurs web nginx dans des conteneurs Docker
+    (port 8080, option --restart unless-stopped). Chaque page indique le
+    nom du serveur (app1 / app2).
+  - VM1 : nginx en repartiteur de charge (load balancer) sur le port 80,
+    avec les deux serveurs en upstream (max_fails=2, fail_timeout=10s).
+  - VM4 : PostgreSQL, ecoute sur 31.69.41.20:5432, accessible seulement
+    par VM2 et VM3.
+
+COMMENT TESTER
+  Conteneurs (VM2 / VM3) :   sudo docker ps
+  Chaque serveur (VM1) :     curl http://69.41.31.11:8080
+                             curl http://69.41.31.12:8080
+  Load balancer (VM5) :      curl http://41.69.31.10   (a lancer 4 fois)
+  Base (VM2 / VM3) :         nc -zv -w 3 31.69.41.20 5432
+Resultats attendus :
+  - les 2 curl directs affichent respectivement app1 et app2
+  - les 4 curl via VM1 alternent entre app1 et app2
+  - nc vers la base : succeeded
+
+=====================================================================
+TEST 5 - DEMONSTRATION D'UNE RESTAURATION DE SERVICE APRES INCIDENT SIMULE
+=====================================================================
+
+REPONSE
+  - Panne d'un noeud applicatif : le load balancer (VM1) envoie tout le
+    trafic vers l'autre noeud (tolerance de panne). Si un conteneur plante,
+    Docker le redemarre (restart unless-stopped).
+  - Perte de la base : restauration depuis la sauvegarde pg_dump.
+
+COMMENT TESTER
+Scenario A - arret d'un conteneur
+  1. VM5 :  watch -n 1 curl -s -o /dev/null -w "%{http_code}\n" http://41.69.31.10
+  2. VM2 :  sudo docker stop web
+     Attendu : le code reste 200 (VM3 repond).
+  3. VM2 :  sudo docker start web
+     Attendu : VM2 revient dans le pool (curl alterne a nouveau).
+
+Scenario B - arret complet d'une VM
+  1. Eteindre VM2 depuis VMware.
+  2. curl http://41.69.31.10 : le service repond toujours (VM3).
+  3. Rallumer VM2 : retour a la normale.
+
+Scenario C - perte de la base de donnees
+  1. VM4 :  sudo -u postgres pg_dump appdb > /tmp/appdb.sql
+  2. VM4 :  sudo -u postgres dropdb appdb        (incident simule)
+  3. VM4 :  sudo -u postgres createdb appdb
+            sudo -u postgres psql appdb < /tmp/appdb.sql
+  4. Verifier que les donnees sont revenues.

@@ -1,0 +1,148 @@
+================================================================================
+TEST 07 - SUPERVISION, SAUVEGARDE & TOLERANCE AUX PANNES (PRA / FAILOVER)
+================================================================================
+
+--------------------------------------------------------------------------------
+1. SUPERVISION DE L'INFRASTRUCTURE DEPUIS VM5 (BACKUP-SUP) & VM1
+--------------------------------------------------------------------------------
+A) Vérification de l'état de santé global des nœuds applicatifs via le proxy VM1 :
+[Où exécuter] : Sur VM5 (backup-sup - 192.168.38.105)
+[Commande]    :
+  curl -s http://41.69.31.10/api/health
+  curl -s http://41.69.31.10/api/stats
+
+[Résultat attendu] :
+  Retourne `"status": "OK"`, le temps de disponibilité (`uptime_seconds`) et les
+  statistiques temps réel des incidents critiques actifs (`critical_active`).
+
+B) Vérification des ressources système (CPU, RAM, Disque) sur chaque VM :
+[Où exécuter] : Sur n'importe quelle VM (VM1 à VM5)
+[Commandes]   :
+  uptime
+  free -h
+  df -h /
+
+[Résultat attendu] :
+  Affiche la charge CPU (load average), la mémoire RAM disponible et l'espace disque
+  conformément au tableau de dimensionnement (VM1/VM4: 4 Go RAM, VM2/VM3/VM5: 2 Go RAM).
+
+C) Vérification du Tableau de Bord Grafana (port 3000) & Prometheus (port 9090) sur VM5 :
+[Où exécuter] : Sur VM5 (192.168.38.105) ou depuis VM1 (41.69.31.10) / Navigateur Windows
+[Commandes]   :
+  systemctl is-active grafana-server prometheus africacloud-sup
+  sudo ss -tulpn | grep -E "9090|3000"
+  curl -s http://41.69.31.50:9090/metrics
+  curl -s http://41.69.31.50:3000/api/supervision
+
+  Accès Web au tableau de bord unique grafana.html :
+    - Depuis Windows Hôte : http://192.168.38.105:3000  (ou http://192.168.38.105:3000/grafana.html)
+    - Depuis VM1 (VLAN 11): http://41.69.31.50:3000     (et http://41.69.31.50:9090/metrics)
+    - Fichier unique local: C:\Users\HP\Desktop\Djaber Louhaidia\Mission2_3\grafana.html
+
+[Résultat attendu] :
+  - Les services `grafana-server`, `prometheus` et `africacloud-sup` sont à l'état `active`.
+  - Les ports `3000/tcp` et `9090/tcp` sont en écoute sur VM5 et autorisés dans UFW depuis VM1 (`41.69.31.10`).
+  - `/metrics` sur le port `9090` retourne les métriques Prometheus en temps réel des 5 VMs (`africacloud_node_up`, `africacloud_node_cpu_percent`, `africacloud_node_ram_percent`, `africacloud_issues_total`, etc.).
+  - Le port `3000` affiche le tableau de bord interactif `grafana.html` supervisant les 5 VMs en direct.
+
+
+--------------------------------------------------------------------------------
+2. TOLERANCE AUX PANNES APPLICATIVE (SCENARIO A - PANNE D'UN NOEUD APPLICATIF)
+--------------------------------------------------------------------------------
+Objectif : Démontrer que si VM2 (`app1`) tombe en panne, le Load Balancer (VM1)
+bascule automatiquement 100% du trafic sur VM3 (`app2`) sans interruption de service.
+
+Etape 1 - Sur VM5 (192.168.38.105), lancer une surveillance continue en boucle :
+[Où exécuter] : Sur VM5 (backup-sup)
+[Commande]    :
+  watch -n 1 'curl -s -o /dev/null -w "Code HTTP: %{http_code}\n" http://41.69.31.10'
+
+Etape 2 - Sur VM2 (192.168.38.102), simuler une panne du service applicatif :
+[Où exécuter] : Sur VM2 (app1)
+[Commande]    :
+  sudo systemctl stop africacloud
+  sudo docker stop web 2>/dev/null
+
+[Résultat attendu pendant la panne de VM2] :
+  - Sur VM5, le code HTTP reste `200` (aucune coupure pour les utilisateurs).
+  - Toutes les requêtes `curl http://41.69.31.10/api/health` sont servies par `VM3 (app2)`.
+
+Etape 3 - Sur VM2 (192.168.38.102), rétablir le service :
+[Où exécuter] : Sur VM2 (app1)
+[Commande]    :
+  sudo systemctl start africacloud
+  sudo docker start web 2>/dev/null
+
+[Résultat attendu après rétablissement] :
+  - VM2 réintègre automatiquement le pool du Load Balancer Nginx sur VM1.
+  - Les requêtes `curl http://41.69.31.10/api/health` alternent à nouveau entre `app1` et `app2`.
+
+
+--------------------------------------------------------------------------------
+3. TOLERANCE AUX PANNES MACHINE (SCENARIO B - ARRET COMPLET D'UNE VM)
+--------------------------------------------------------------------------------
+Etape 1 - Éteindre complètement VM2 depuis VMware Workstation (Power Off / Suspend).
+Etape 2 - Depuis VM5 (ou le PC Hôte) :
+  curl -i http://41.69.31.10
+[Résultat attendu] :
+  Le service répond toujours `HTTP/1.1 200 OK` grâce à VM3 (`app2`).
+Etape 3 - Rallumer VM2 dans VMware :
+  Grâce à `systemctl enable africacloud` et Docker `--restart unless-stopped`,
+  le service redémarre tout seul au boot de VM2 et revient dans le Load Balancer.
+
+
+--------------------------------------------------------------------------------
+4. SCRIPT DE SAUVEGARDE CENTRALISEE & SAUVEGARDE AUTOMATIQUE (04H00 SUR VM5)
+--------------------------------------------------------------------------------
+A) Vérifier la planification automatique de la sauvegarde (Cron 04h00 + Systemd Timer) :
+[Où exécuter] : Sur VM5 (backup-sup - 192.168.38.105)
+[Commandes]   :
+  crontab -l
+  cat /etc/cron.d/africacloud-backup
+  systemctl list-timers africacloud-backup.timer --no-pager
+
+[Résultat attendu] :
+  - Affiche la tâche planifiée à 04h00 chaque nuit :
+    `0 4 * * * sudo /opt/africacloud/backup_africacloud.sh >> /var/log/africacloud_backup.log 2>&1`
+  - Le timer systemd `africacloud-backup.timer` est actif et planifié pour `04:00:00`.
+
+B) Afficher le script de sauvegarde et lancer une sauvegarde immédiate depuis VM5 :
+[Où exécuter] : Sur VM5 (backup-sup - 192.168.38.105)
+[Commandes]   :
+  cat /opt/africacloud/backup_africacloud.sh
+  sudo /opt/africacloud/backup_africacloud.sh
+  ls -la /var/backups/africacloud/latest/vm4_db/
+  ls -la /var/backups/africacloud/archives/
+  ls -la /var/backups/africacloud/cloud_offsite_sync/
+  cat /var/backups/africacloud/latest/vm4_db/africacloud_dump.sql
+
+[Résultat attendu] :
+  - Le script sauvegarde automatiquement via SSH :
+      [1/4] La base de données centrale de VM4 (`31.69.41.20`) : `africacloud.db` + `africacloud_dump.sql`
+      [2/4] Le code et la configuration de VM2 (`69.41.31.11`) : `vm2_africacloud.tar.gz`
+      [3/4] Le code et la configuration de VM3 (`69.41.31.12`) : `vm3_africacloud.tar.gz`
+      [4/4] Les configurations Nginx & Dnsmasq de VM1 (`41.69.31.10`) : `vm1_configs.tar.gz`
+  - Génère l'archive complète `.tar.gz` dans `/var/backups/africacloud/archives/` et la réplique dans `/var/backups/africacloud/cloud_offsite_sync/`.
+
+
+--------------------------------------------------------------------------------
+5. RESTAURATION AUTOMATIQUE DE LA BASE DE DONNEES APRES INCIDENT (SCENARIO C)
+--------------------------------------------------------------------------------
+A) Restauration automatique depuis VM5 vers VM4 (`restore_africacloud.sh`) :
+[Où exécuter] : Sur VM5 (backup-sup - 192.168.38.105)
+[Commandes]   :
+  # 1. Lancer une sauvegarde fraîche sur VM5
+  sudo /opt/africacloud/backup_africacloud.sh
+
+  # 2. Simuler une perte totale des données sur VM4 (31.69.41.20)
+  ssh -i /opt/africacloud/.ssh/id_ed25519 acadmin@31.69.41.20 "echo 'P@ssWord' | sudo -S python3 -c \"import sqlite3; c=sqlite3.connect('/opt/africacloud/africacloud.db'); c.execute('DELETE FROM issues'); c.commit()\""
+  curl -s http://41.69.31.10/api/issues
+
+  # 3. Restaurer la base de données centrale depuis VM5 vers VM4 en une commande
+  sudo /opt/africacloud/restore_africacloud.sh
+  curl -s http://41.69.31.10/api/issues
+
+[Résultat attendu] :
+  - Après l'étape 2, `curl http://41.69.31.10/api/issues` retourne `[]` (base vide suite à l'incident).
+  - Après l'étape 3 (`sudo /opt/africacloud/restore_africacloud.sh`), la base de VM4 est restaurée depuis `/var/backups/africacloud/latest/vm4_db/africacloud.db` et tous les incidents réapparaissent immédiatement sur VM2 (`app1`) et VM3 (`app2`).
+================================================================================

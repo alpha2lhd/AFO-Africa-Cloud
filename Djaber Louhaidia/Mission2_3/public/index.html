@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AfricaCloud — Signalement de Problèmes Techniques</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-badge">AFRICACLOUD</span>
+      <div>
+        <h1>Portail de Signalement d'Incidents Techniques</h1>
+        <span id="server-subtitle">Architecture HA : <strong>VM2 (app1 : 69.41.31.11)</strong> &amp; <strong>VM3 (app2 : 69.41.31.12)</strong></span>
+      </div>
+    </div>
+    <div class="health-pill">
+      <span class="dot" id="api-dot"></span>
+      <span id="api-status-text">API & BDD : Connexion...</span>
+      <strong id="node-badge"></strong>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- Bandeau Serveurs Applicatifs VM2 (app1) & VM3 (app2) -->
+    <section class="card" style="padding: 0.85rem 1.25rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; border-left: 4px solid #f59e0b;">
+      <div id="active-node-banner">
+        <strong>Noeud Applicatif Actif :</strong> <code id="banner-node-name">Chargement...</code>
+      </div>
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <span style="font-size: 0.82rem; color: #94a3b8;">Cible API :</span>
+        <select id="api-base-select" onchange="changeApiBase(this.value)" style="width: auto; padding: 0.35rem 0.6rem;">
+          <option value="">Auto (Serveur Courant)</option>
+          <option value="http://192.168.38.102:8080">VM2 app1 (NAT 192.168.38.102:8080)</option>
+          <option value="http://192.168.38.103:8080">VM3 app2 (NAT 192.168.38.103:8080)</option>
+          <option value="http://69.41.31.11:8080">VM2 app1 (VLAN 22 — 69.41.31.11:8080)</option>
+          <option value="http://69.41.31.12:8080">VM3 app2 (VLAN 22 — 69.41.31.12:8080)</option>
+          <option value="http://192.168.38.101">VM1 ctrl-proxy (NAT 192.168.38.101)</option>
+        </select>
+      </div>
+    </section>
+    <!-- Statistiques en Temps Réel (/api/stats) -->
+    <section class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total Signalements</div>
+        <div class="stat-value" id="stat-total">-</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Incidents Ouverts</div>
+        <div class="stat-value" id="stat-open" style="color: #dc2626;">-</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">En Cours</div>
+        <div class="stat-value" id="stat-progress" style="color: #d97706;">-</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Incidents Résolus</div>
+        <div class="stat-value" id="stat-resolved" style="color: #16a34a;">-</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Critiques Actifs</div>
+        <div class="stat-value" id="stat-critical" style="color: #dc2626;">-</div>
+      </div>
+    </section>
+
+    <!-- 1. Formulaire de Signalement d'un Problème Technique (POST /api/issues) -->
+    <section class="card">
+      <div class="card-header">
+        <h2>1. Signaler un Nouveau Problème Technique</h2>
+      </div>
+
+      <form id="issue-form" class="issue-form">
+        <div class="form-grid">
+          <input type="text" id="iss-title" placeholder="Titre du problème (ex: Panne serveur VM2)" required />
+          <select id="iss-category">
+            <option value="Serveur / VM">Serveur / VM (VM1, VM2, VM3)</option>
+            <option value="Réseau / VLAN">Réseau / VLAN (11, 22, 33)</option>
+            <option value="Base de Données (VM4)">Base de Données (VM4)</option>
+            <option value="Application Web">Application Web / API</option>
+            <option value="Sauvegarde (VM5)">Supervision & Sauvegarde (VM5)</option>
+            <option value="Autre">Autre problème technique</option>
+          </select>
+          <select id="iss-priority">
+            <option value="Basse">Priorité : Basse</option>
+            <option value="Moyenne" selected>Priorité : Moyenne</option>
+            <option value="Haute">Priorité : Haute</option>
+            <option value="Critique">Priorité : Critique</option>
+          </select>
+          <input type="text" id="iss-reporter" placeholder="Signalé par (Nom / Service)" required />
+        </div>
+        <textarea id="iss-description" placeholder="Décrivez le problème technique en détail (message d'erreur, IP ou service concerné...)" required></textarea>
+        <div class="form-actions">
+          <button type="submit" class="btn-primary">+ Envoyer le Signalement</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- 2. Liste et Suivi des Incidents Techniques (GET / PUT / DELETE /api/issues) -->
+    <section class="card">
+      <div class="card-header">
+        <h2>2. Suivi des Problèmes Techniques Signalés (Base de Données)</h2>
+        <div class="filter-group">
+          <button class="btn-outline btn-sm active" onclick="setFilter('', this)">Tous</button>
+          <button class="btn-outline btn-sm" onclick="setFilter('Ouvert', this)">Ouverts</button>
+          <button class="btn-outline btn-sm" onclick="setFilter('En cours', this)">En cours</button>
+          <button class="btn-outline btn-sm" onclick="setFilter('Résolu', this)">Résolus</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Problème & Description</th>
+              <th>Catégorie</th>
+              <th>Priorité</th>
+              <th>Signalé par</th>
+              <th>Date</th>
+              <th>Statut</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="issues-tbody">
+            <tr><td colspan="8">Chargement des incidents...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 3. Testeur API REST en direct -->
+    <section class="card">
+      <div class="card-header">
+        <h2>3. Testeur API REST en Direct</h2>
+      </div>
+      <div class="api-buttons">
+        <button class="btn-outline btn-sm" onclick="testEndpoint('/api/health')">GET /api/health</button>
+        <button class="btn-outline btn-sm" onclick="testEndpoint('/api/stats')">GET /api/stats</button>
+        <button class="btn-outline btn-sm" onclick="testEndpoint('/api/issues')">GET /api/issues</button>
+      </div>
+      <pre id="api-output">Cliquez sur un endpoint ci-dessus pour afficher la réponse JSON de l'API REST...</pre>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

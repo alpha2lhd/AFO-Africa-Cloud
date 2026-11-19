@@ -1,0 +1,95 @@
+================================================================================
+TEST 03 - FICHIERS DEPLOYES, SERVICES SYSTEMD & PORTS EN ECOUTE
+================================================================================
+
+--------------------------------------------------------------------------------
+1. VERIFICATION DE L'ARBORESCENCE DES FICHIERS (/opt/africacloud)
+--------------------------------------------------------------------------------
+[Où exécuter] : Sur VM2 (app1 - 192.168.38.102) et VM3 (app2 - 192.168.38.103)
+[Commandes]   :
+  ls -la /opt/africacloud
+  ls -la /opt/africacloud/public
+
+[Résultat attendu] :
+  Dans /opt/africacloud :
+    - Dockerfile          (recette de l'image Docker)
+    - docker-compose.yml  (orchestration Docker Compose)
+    - server.py           (serveur Web & API REST Python 3)
+    - africacloud.db      (base de données SQLite)
+    - schema.sql          (schéma SQL et données initiales)
+    - public/             (dossier contenant l'interface Web)
+
+  Dans /opt/africacloud/public :
+    - index.html          (interface utilisateur du portail AfricaCloud)
+    - style.css           (feuille de style mode clair)
+    - app.js              (logique frontend & requêtes fetch vers l'API REST)
+
+
+--------------------------------------------------------------------------------
+2. AFFICHAGE DU CODE SOURCE DEPLOYE SUR LES VMs
+--------------------------------------------------------------------------------
+[Où exécuter] : Sur VM2 (app1) ou VM3 (app2)
+[Commandes]   :
+  head -n 45 /opt/africacloud/server.py
+  cat /opt/africacloud/schema.sql
+  head -n 30 /opt/africacloud/public/index.html
+
+[Résultat attendu] :
+  Affiche le code Python du serveur API REST, la définition SQL de la table `issues`,
+  et le code HTML du portail de signalement d'incidents techniques AfricaCloud.
+
+
+--------------------------------------------------------------------------------
+3. VERIFICATION DU SERVICE SYSTEMD (DEMARRAGE AUTOMATIQUE AU BOOT)
+--------------------------------------------------------------------------------
+[Où exécuter] : Sur VM2 (app1 - 192.168.38.102) et VM3 (app2 - 192.168.38.103)
+[Commandes]   :
+  sudo systemctl status africacloud --no-pager
+  systemctl is-enabled africacloud
+  systemctl is-active africacloud
+
+[Résultat attendu] :
+  - Status      : Active: active (running)
+  - is-enabled  : enabled (démarre automatiquement au démarrage de la VM)
+  - is-active   : active
+
+
+--------------------------------------------------------------------------------
+4. CONSULTATION DES JOURNAUX (LOGS) DU SERVICE APPLICATIF
+--------------------------------------------------------------------------------
+[Où exécuter] : Sur VM2 (app1) ou VM3 (app2)
+[Commande]    :
+  sudo journalctl -u africacloud -n 25 --no-pager
+
+[Résultat attendu] :
+  Affiche la bannière de démarrage AfricaCloud :
+    -> Listening on 0.0.0.0:8080
+    -> Listening on 0.0.0.0:80
+    -> Listening on 0.0.0.0:3000
+  Ainsi que les traces HTTP des requêtes reçues (ex: GET /api/health HTTP/1.1 200).
+
+
+--------------------------------------------------------------------------------
+5. VERIFICATION DES PORTS EN ECOUTE SUR LES VMs
+--------------------------------------------------------------------------------
+A) Sur VM2 (app1) et VM3 (app2) :
+[Commande] :
+  sudo ss -tulpn | grep -E "8080|3000|:80"
+[Résultat attendu] :
+  LISTEN  0.0.0.0:8080  (python3 / docker-proxy)
+  LISTEN  0.0.0.0:80    (python3 / docker-proxy)
+  LISTEN  0.0.0.0:3000  (python3 / docker-proxy)
+
+B) Sur VM1 (ctrl-proxy) :
+[Commande] :
+  sudo ss -tulpn | grep -E "nginx|dnsmasq|:80|:53"
+[Résultat attendu] :
+  - nginx en écoute sur le port 80 (Load Balancer)
+  - dnsmasq en écoute sur le port 53 (Serveur DNS zone lab.local)
+
+C) Sur VM4 (db) :
+[Commande] :
+  sudo ss -tulpn | grep 5432
+[Résultat attendu] :
+  - postgres en écoute sur 31.69.41.20:5432 (ou 0.0.0.0:5432)
+================================================================================

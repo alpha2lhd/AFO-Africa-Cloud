@@ -1,0 +1,107 @@
+================================================================================
+TEST 01 - RESEAU, ADRESSAGE IP, ROUTAGE INTER-VLAN & RESOLUTION DNS
+================================================================================
+
+--------------------------------------------------------------------------------
+1. VERIFICATION DES ADRESSES IP & INTERFACES RESEAU
+--------------------------------------------------------------------------------
+[Où exécuter] : Sur chaque VM (VM1, VM2, VM3, VM4, VM5)
+[Commande]    :
+  ip -br addr show
+
+[Résultat attendu] :
+  - Sur VM1 : affiche les IPs 41.69.31.10/24 (VLAN 11), 69.41.31.10/24 (VLAN 22), 31.69.41.10/24 (VLAN 33)
+  - Sur VM2 : affiche les IPs 69.41.31.11/24 (VLAN 22), 31.69.41.11/24 (VLAN 33)
+  - Sur VM3 : affiche les IPs 69.41.31.12/24 (VLAN 22), 31.69.41.12/24 (VLAN 33)
+  - Sur VM4 : affiche l'IP 31.69.41.20/24 (VLAN 33)
+  - Sur VM5 : affiche l'IP 41.69.31.50/24 (VLAN 11)
+
+
+--------------------------------------------------------------------------------
+2. VERIFICATION DU ROUTAGE INTER-VLAN (IP FORWARDING SUR VM1)
+--------------------------------------------------------------------------------
+[Où exécuter] : Sur VM1 (ctrl-proxy - 192.168.38.101)
+[Commande]    :
+  sysctl net.ipv4.ip_forward
+  ip route show
+
+[Résultat attendu] :
+  - net.ipv4.ip_forward = 1 (le routage entre les 3 VLANs est actif sur VM1)
+  - La table de routage montre les 3 réseaux directement connectés :
+    41.69.31.0/24, 69.41.31.0/24 et 31.69.41.0/24.
+
+
+--------------------------------------------------------------------------------
+3. TESTS DE CONNECTIVITE IP (PING INTER-VLAN & PASSERELLE NAT)
+--------------------------------------------------------------------------------
+A) Depuis toutes les VMs (VM1 à VM5) vers la passerelle Hôte NAT (et Internet si connecté) :
+[Commande] :
+  ping -c 2 192.168.38.1
+  ping -c 2 8.8.8.8
+[Résultat attendu] :
+  2 packets transmitted, 2 received, 0% packet loss vers la passerelle 192.168.38.1
+  (et vers 8.8.8.8 lorsque le PC hôte est connecté à Internet).
+
+B) Depuis VM5 (VLAN 11) vers VM4 (VLAN 33) et VM2 (VLAN 22) :
+[Où exécuter] : Sur VM5 (backup-sup - 192.168.38.105)
+[Commandes]   :
+  ping -c 2 31.69.41.20
+  ping -c 2 69.41.31.11
+[Résultat attendu] :
+  2 packets transmitted, 2 received, 0% packet loss (prouve que VM1 route entre VLAN 11, 22 et 33).
+
+C) Depuis VM2 (VLAN 22/33) vers VM4 (BDD) et VM3 (App2) :
+[Où exécuter] : Sur VM2 (app1 - 192.168.38.102)
+[Commandes]   :
+  ping -c 2 31.69.41.20
+  ping -c 2 69.41.31.12
+[Résultat attendu] :
+  2 packets transmitted, 2 received, 0% packet loss.
+
+D) Depuis VM1 (ctrl-proxy) vers VM5 (backup-sup) :
+[Où exécuter] : Sur VM1 (ctrl-proxy - 192.168.38.101)
+[Commande]    :
+  ping -c 2 41.69.31.50
+[Résultat attendu] :
+  2 packets transmitted, 2 received, 0% packet loss.
+
+
+--------------------------------------------------------------------------------
+4. VERIFICATION DU SERVEUR DNS (DNSMASQ SUR VM1 - ZONE lab.local)
+--------------------------------------------------------------------------------
+A) Vérifier que le service DNS est actif sur VM1 :
+[Où exécuter] : Sur VM1 (ctrl-proxy - 192.168.38.101)
+[Commandes]   :
+  systemctl is-active dnsmasq
+  sudo ss -ulpn | grep :53
+[Résultat attendu] :
+  - "active"
+  - dnsmasq écoute sur le port 53 (41.69.31.10:53, 69.41.31.10:53, 31.69.41.10:53).
+
+B) Tester la résolution DNS interne depuis VM2 (VLAN 22) :
+[Où exécuter] : Sur VM2 (app1 - 192.168.38.102)
+[Commande]    :
+  nslookup db.lab.local 69.41.31.10
+[Résultat attendu] :
+  Name:    db.lab.local
+  Address: 31.69.41.20
+
+C) Tester la résolution DNS interne depuis VM5 (VLAN 11) :
+[Où exécuter] : Sur VM5 (backup-sup - 192.168.38.105)
+[Commandes]   :
+  nslookup ctrl-proxy.lab.local 41.69.31.10
+  nslookup app1.lab.local 41.69.31.10
+  nslookup backup-sup.lab.local 41.69.31.10
+[Résultat attendu] :
+  - ctrl-proxy.lab.local -> 41.69.31.10
+  - app1.lab.local       -> 69.41.31.11
+  - backup-sup.lab.local -> 41.69.31.50
+
+D) Tester la résolution DNS interne depuis VM4 (VLAN 33) :
+[Où exécuter] : Sur VM4 (db - 192.168.38.104)
+[Commande]    :
+  nslookup app2.lab.local 31.69.41.10
+[Résultat attendu] :
+  Name:    app2.lab.local
+  Address: 69.41.31.12
+================================================================================

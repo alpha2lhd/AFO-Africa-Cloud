@@ -1,0 +1,75 @@
+================================================================================
+TEST 05 - HEALTHCHECK (/api/health), REVERSE PROXY & LOAD BALANCER NGINX (VM1)
+================================================================================
+
+--------------------------------------------------------------------------------
+1. VERIFICATION DU SERVICE NGINX (LOAD BALANCER) SUR VM1
+--------------------------------------------------------------------------------
+[Où exécuter] : Sur VM1 (ctrl-proxy - 192.168.38.101)
+[Commandes]   :
+  systemctl is-active nginx
+  sudo nginx -t
+  cat /etc/nginx/sites-enabled/* /etc/nginx/conf.d/* 2>/dev/null
+
+[Résultat attendu] :
+  - `active`
+  - `nginx: configuration file /etc/nginx/nginx.conf test is successful`
+  - Affiche le bloc `upstream` contenant les deux nœuds applicatifs :
+      server 69.41.31.11:8080 max_fails=2 fail_timeout=10s;
+      server 69.41.31.12:8080 max_fails=2 fail_timeout=10s;
+    et le bloc `server` écoutant sur le port 80 avec `proxy_pass`.
+
+
+--------------------------------------------------------------------------------
+2. TEST DE SANTE DIRECT SUR CHAQUE NOEUD APPLICATIF (VM2 & VM3)
+--------------------------------------------------------------------------------
+A) Depuis VM1 (ctrl-proxy) via le réseau interne VLAN 22 :
+[Où exécuter] : Sur VM1 (ctrl-proxy - 192.168.38.101)
+[Commandes]   :
+  curl -s http://69.41.31.11:8080/api/health
+  curl -s http://69.41.31.12:8080/api/health
+
+B) Depuis le PC Hôte Windows via le réseau NAT :
+[Où exécuter] : PowerShell / CMD sur Windows (ou navigateur)
+[Commandes]   :
+  curl.exe -s http://192.168.38.102:8080/api/health
+  curl.exe -s http://192.168.38.103:8080/api/health
+
+[Résultat attendu] :
+  Réponse JSON HTTP 200 :
+  {
+    "service": "AfricaCloud - Technical Issue Reporting API",
+    "status": "OK",
+    "database": "Connected to VM4 Central DB (31.69.41.20:5432)",
+    "db_host": "31.69.41.20:5432",
+    "served_by_node": "VM2 app1 : 69.41.31.11 / 31.69.41.11 (NAT 192.168.38.102)",
+    "hostname": "app1",
+    "uptime_seconds": ...,
+    "timestamp": "..."
+  }
+  (Et `"hostname": "app2"` sur le second appel vers VM3).
+
+
+--------------------------------------------------------------------------------
+3. TEST DE REPARTITION DE CHARGE (ROUND-ROBIN) VIA LE LOAD BALANCER (VM1)
+--------------------------------------------------------------------------------
+A) Depuis VM5 (backup-sup - VLAN 11) vers VM1 (41.69.31.10) :
+[Où exécuter] : Sur VM5 (backup-sup - 192.168.38.105)
+[Commande]    :
+  for i in 1 2 3 4; do curl -s http://41.69.31.10/api/health | grep -E "hostname|served_by_node"; done
+
+  (Ou si test sur la racine HTML) :
+  for i in 1 2 3 4; do curl -s http://41.69.31.10; done
+
+B) Depuis le PC Hôte Windows vers VM1 (192.168.38.101) :
+[Où exécuter] : PowerShell sur Windows
+[Commande]    :
+  1..4 | ForEach-Object { curl.exe -s http://192.168.38.101/api/health }
+
+[Résultat attendu] :
+  Les 4 requêtes alternent automatiquement entre VM2 (`app1`) et VM3 (`app2`) :
+    Requête 1 -> servie par app1 (69.41.31.11)
+    Requête 2 -> servie par app2 (69.41.31.12)
+    Requête 3 -> servie par app1 (69.41.31.11)
+    Requête 4 -> servie par app2 (69.41.31.12)
+================================================================================

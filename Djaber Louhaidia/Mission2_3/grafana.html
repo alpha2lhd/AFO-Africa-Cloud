@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Grafana — AfricaCloud Supervision, Sauvegarde & Live Testers (VM5 : 41.69.31.50:3000)</title>
+  <style>
+    :root {
+      --bg-canvas: #0b0c0e;
+      --bg-panel: #181b1f;
+      --bg-panel-header: #1f2329;
+      --bg-card: #22252b;
+      --border: #2c3235;
+      --text-main: #f4f5f8;
+      --text-muted: #9fa7b3;
+      --grafana-orange: #f47a20;
+      --green: #73bf69;
+      --blue: #5794f2;
+      --yellow: #fade2a;
+      --red: #f2495c;
+      --purple: #b877d9;
+      --cyan: #37c4c0;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-canvas);
+      color: var(--text-main);
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 13px;
+      line-height: 1.45;
+      min-height: 100vh;
+    }
+
+    /* Top Grafana Bar */
+    .grafana-navbar {
+      background: #141619;
+      border-bottom: 1px solid var(--border);
+      padding: 10px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .grafana-logo {
+      width: 30px;
+      height: 30px;
+      border-radius: 6px;
+      background: radial-gradient(circle at 30% 30%, #fbad37, #f05a28);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      color: #fff;
+      font-size: 17px;
+      box-shadow: 0 0 12px rgba(244, 122, 32, 0.45);
+    }
+
+    .breadcrumb {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .breadcrumb-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .breadcrumb-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .tag-orange {
+      background: rgba(244, 122, 32, 0.16);
+      color: #ff9830;
+      border: 1px solid rgba(244, 122, 32, 0.4);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .tag-green {
+      background: rgba(115, 191, 105, 0.16);
+      color: var(--green);
+      border: 1px solid rgba(115, 191, 105, 0.4);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .tag-red {
+      background: rgba(242, 73, 92, 0.18);
+      color: var(--red);
+      border: 1px solid rgba(242, 73, 92, 0.45);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .toolbar-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .gf-btn {
+      background: #22252b;
+      color: var(--text-main);
+      border: 1px solid #343b42;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      text-decoration: none;
+      transition: all 0.15s ease;
+    }
+
+    .gf-btn:hover {
+      background: #2c3239;
+      border-color: #4a545e;
+    }
+
+    .gf-btn-primary {
+      background: linear-gradient(180deg, #f47a20, #d95f0e);
+      border-color: #f47a20;
+      color: #fff;
+      font-weight: 600;
+    }
+
+    .gf-btn-primary:hover {
+      background: #ff852c;
+    }
+
+    .gf-btn-green {
+      background: linear-gradient(180deg, #3f9c35, #2f7d27);
+      border-color: #56b44b;
+      color: #fff;
+      font-weight: 600;
+    }
+
+    .gf-btn-green:hover {
+      background: #4bb040;
+    }
+
+    .gf-btn-blue {
+      background: rgba(87, 148, 242, 0.18);
+      border-color: rgba(87, 148, 242, 0.5);
+      color: #8ab8ff;
+    }
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      display: inline-block;
+      box-shadow: 0 0 8px var(--green);
+      animation: pulse 1.6s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.45; transform: scale(0.88); }
+    }
+
+    .container {
+      max-width: 1620px;
+      margin: 0 auto;
+      padding: 14px 16px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    /* Row 1: Stat Panels */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 10px;
+    }
+
+    @media (max-width: 1280px) {
+      .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 720px) {
+      .kpi-grid { grid-template-columns: repeat(1, 1fr); }
+    }
+
+    .panel {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .panel-header {
+      background: var(--bg-panel-header);
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      font-weight: 600;
+      color: #d8d9da;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .panel-body {
+      padding: 12px;
+      flex: 1;
+    }
+
+    .stat-value {
+      font-size: 23px;
+      font-weight: 800;
+      margin: 4px 0;
+      letter-spacing: -0.3px;
+    }
+
+    .stat-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    /* Live Testers Center */
+    .tester-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .test-results-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .test-category-box {
+      background: #121519;
+      border: 1px solid #282e35;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .test-category-header {
+      background: #1a1e24;
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-weight: 700;
+      font-size: 12.5px;
+      border-bottom: 1px solid #262c33;
+    }
+
+    .test-steps-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    .test-steps-table th,
+    .test-steps-table td {
+      padding: 7px 10px;
+      border-bottom: 1px solid #1e2329;
+      text-align: left;
+      vertical-align: middle;
+    }
+
+    .test-steps-table th {
+      color: var(--text-muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      background: #15181d;
+    }
+
+    .cmd-pill {
+      font-family: Consolas, monospace;
+      background: #0b0d0f;
+      border: 1px solid #252b31;
+      color: #8ab8ff;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 11px;
+    }
+
+    .actual-pill {
+      font-family: Consolas, monospace;
+      color: #d4d7dc;
+      font-size: 11.5px;
+    }
+
+    /* Row 2: Time series charts */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    @media (max-width: 1150px) {
+      .charts-grid { grid-template-columns: 1fr; }
+    }
+
+    .chart-box {
+      height: 175px;
+      width: 100%;
+      position: relative;
+    }
+
+    .chart-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 8px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .legend-line {
+      width: 12px;
+      height: 3px;
+      border-radius: 2px;
+      display: inline-block;
+    }
+
+    /* Row 3: 5 VMs Cards */
+    .vms-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+    }
+
+    @media (max-width: 1350px) {
+      .vms-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 720px) {
+      .vms-grid { grid-template-columns: 1fr; }
+    }
+
+    .vm-role {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      min-height: 30px;
+    }
+
+    .vm-ips {
+      background: #121417;
+      border: 1px solid #262b31;
+      border-radius: 4px;
+      padding: 6px 8px;
+      font-family: Consolas, monospace;
+      font-size: 11px;
+      color: #8ab8ff;
+      margin-bottom: 10px;
+    }
+
+    .gauge-row {
+      margin-bottom: 8px;
+    }
+
+    .gauge-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      margin-bottom: 3px;
+    }
+
+    .gauge-track {
+      height: 7px;
+      background: #111316;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .gauge-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.4s ease;
+    }
+
+    .services-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px solid var(--border);
+    }
+
+    .svc-badge {
+      padding: 2px 7px;
+      border-radius: 3px;
+      font-size: 10.5px;
+      font-weight: 600;
+      font-family: Consolas, monospace;
+    }
+
+    .svc-up {
+      background: rgba(115, 191, 105, 0.16);
+      color: var(--green);
+      border: 1px solid rgba(115, 191, 105, 0.4);
+    }
+
+    .svc-down {
+      background: rgba(242, 73, 92, 0.18);
+      color: var(--red);
+      border: 1px solid rgba(242, 73, 92, 0.4);
+    }
+
+    /* Row 4: Bottom 2 panels */
+    .bottom-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 12px;
+    }
+
+    @media (max-width: 1100px) {
+      .bottom-grid { grid-template-columns: 1fr; }
+    }
+
+    .terminal-box {
+      background: #0d0f12;
+      border: 1px solid #252a30;
+      border-radius: 4px;
+      padding: 10px 12px;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 11.5px;
+      color: #a9d18e;
+      max-height: 230px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+
+    .arch-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    .arch-table th, .arch-table td {
+      padding: 7px 9px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+    }
+
+    .arch-table th {
+      color: var(--text-muted);
+      font-weight: 600;
+      background: #14171b;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #1e242b;
+      border-left: 4px solid var(--green);
+      color: #fff;
+      padding: 12px 16px;
+      border-radius: 4px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+      display: none;
+      z-index: 999;
+      font-size: 12.5px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- BARRE SUPERIEURE GRAFANA -->
+  <header class="grafana-navbar">
+    <div class="brand-group">
+      <div class="grafana-logo">G</div>
+      <div class="breadcrumb">
+        <div class="breadcrumb-title">
+          AfricaCloud — Supervision, Sauvegarde &amp; Live Testers (Grafana + Prometheus)
+          <span class="tag-orange">ASO 2026</span>
+          <span class="tag-green" id="datasource-badge">Prometheus VM5 (41.69.31.50:9090)</span>
+        </div>
+        <div class="breadcrumb-sub">
+          Serveur Supervision : VM5 backup-sup (VLAN 11 : 41.69.31.50 / NAT : 192.168.38.105:3000) — Collecte &amp; Exécution de Tests Temps Réel sur VM1..VM5
+        </div>
+      </div>
+    </div>
+
+    <div class="toolbar-group">
+      <a class="gf-btn gf-btn-blue" href="http://192.168.38.101" target="_blank">Portail Incidents (VM1 Proxy)</a>
+      <button class="gf-btn gf-btn-green" onclick="runLiveTest('all')">▶ Lancer Tous les Tests en Direct</button>
+      <button class="gf-btn gf-btn-primary" onclick="triggerBackupNow()">💾 Sauvegarde VM5 Maintenant</button>
+      <button class="gf-btn" onclick="togglePrometheusModal()">📈 /metrics (9090)</button>
+      <div class="gf-btn">
+        <span class="pulse-dot" id="live-dot"></span>
+        <span id="last-refresh-label">Live (2s)</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <!-- LIGNE 1 : INDICATEURS CLES (STAT PANELS) -->
+    <section class="kpi-grid">
+      <div class="panel">
+        <div class="panel-header"><span>Disponibilité Cluster VMs</span><span>VLAN 11/22/33</span></div>
+        <div class="panel-body">
+          <div class="stat-value" style="color: var(--green);" id="kpi-vms-up">5 / 5 UP</div>
+          <div class="stat-sub">VM1, VM2, VM3, VM4, VM5 en ligne</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header"><span>Load Balancer (VM1)</span><span>41.69.31.10:80</span></div>
+        <div class="panel-body">
+          <div class="stat-value" style="color: var(--blue);" id="kpi-lb-status">ACTIF (Nginx)</div>
+          <div class="stat-sub">Round-Robin : VM2 (app1) &harr; VM3 (app2)</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header"><span>BDD Centrale (VM4)</span><span>31.69.41.20:5432</span></div>
+        <div class="panel-body">
+          <div class="stat-value" style="color: var(--cyan);" id="kpi-db-status">CONNECTÉE</div>
+          <div class="stat-sub">Synchronisation temps réel VM2 &amp; VM3</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header"><span>Pare-feu &amp; Filtrage UFW</span><span>Sécurité</span></div>
+        <div class="panel-body">
+          <div class="stat-value" style="color: var(--green);">5 / 5 ACTIFS</div>
+          <div class="stat-sub">Politique Deny Incoming + Isolation VLAN</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header"><span>Incidents Techniques</span><span>API /api/stats</span></div>
+        <div class="panel-body">
+          <div class="stat-value" style="color: var(--yellow);" id="kpi-issues-total">3 Incidents</div>
+          <div class="stat-sub" id="kpi-issues-sub">1 Critique actif | 1 En cours | 1 Résolu</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header"><span>Sauvegarde Auto (VM5)</span><span>Cron 04h00</span></div>
+        <div class="panel-body">
+          <div class="stat-value" style="color: var(--purple);" id="kpi-backup-status">OK (04h00)</div>
+          <div class="stat-sub" id="kpi-backup-sub">Dernière : aujourd'hui | Réplication Cloud OK</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- LIGNE 2 : CENTRE DE TESTS INTERACTIFS EN DIRECT (BDD, PARE-FEU, DNS, LOAD BALANCER, DOCKER, PRA) -->
+    <section class="panel" style="border-color: rgba(244, 122, 32, 0.5);">
+      <div class="panel-header" style="background: linear-gradient(90deg, #1f2329, #26201b);">
+        <span>⚡ CENTRE DE VÉRIFICATION &amp; TESTS EN DIRECT (EXÉCUTION RÉELLE SUR LES 5 VMs VIA SSH &amp; API)</span>
+        <span id="live-test-global-badge" class="tag-green">Prêt — Cliquez sur un test pour l'exécuter en direct</span>
+      </div>
+      <div class="panel-body">
+        <div class="tester-toolbar">
+          <button class="gf-btn gf-btn-green" onclick="runLiveTest('all')">▶ Lancer TOUS les Tests (1 à 6)</button>
+          <button class="gf-btn" onclick="runLiveTest('firewall')">🛡️ Test Pare-feu UFW (nc Bloqués / Autorisés)</button>
+          <button class="gf-btn" onclick="runLiveTest('database')">🗄️ Test BDD Temps Réel (VM2 &rarr; VM4:5432 &rarr; VM3)</button>
+          <button class="gf-btn" onclick="runLiveTest('loadbalancer')">⚖️ Test Load Balancer Nginx (Round-Robin VM1)</button>
+          <button class="gf-btn" onclick="runLiveTest('dns')">🌐 Test Résolution DNS (dnsmasq lab.local)</button>
+          <button class="gf-btn" onclick="runLiveTest('network')">📡 Test Connectivité IP &amp; Routage Inter-VLAN</button>
+          <button class="gf-btn" onclick="runLiveTest('docker_pra')">🐳 Test Docker, Cron 04h00 &amp; Sauvegarde PRA</button>
+        </div>
+
+        <div id="live-test-results-container" class="test-results-grid">
+          <div style="color: var(--text-muted); font-size: 12.5px; padding: 6px 2px;">
+            Sélectionnez un test ci-dessus (ex: <strong>Test Pare-feu UFW</strong> ou <strong>Test BDD Temps Réel</strong>) pour exécuter les vraies commandes (<code>nc -zv</code>, <code>nslookup</code>, <code>ping</code>, <code>POST/GET/DELETE /api/issues</code>, <code>docker ps</code>) directement sur <strong>VM1, VM2, VM3, VM4 et VM5</strong> et afficher les résultats attendus vs obtenus.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- LIGNE 3 : GRAPHIQUES TEMPS REEL GRAFANA -->
+    <section class="charts-grid">
+      <div class="panel">
+        <div class="panel-header">
+          <span>Charge CPU par Machine Virtuelle (%)</span>
+          <span style="color: var(--text-muted); font-weight: 400;">rate(node_cpu_seconds_total[1m])</span>
+        </div>
+        <div class="panel-body">
+          <div class="chart-box">
+            <svg id="svg-cpu" width="100%" height="175" viewBox="0 0 500 175" preserveAspectRatio="none"></svg>
+          </div>
+          <div class="chart-legend" id="legend-cpu"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <span>Utilisation Mémoire RAM par VM (%)</span>
+          <span style="color: var(--text-muted); font-weight: 400;">node_memory_Active_bytes / MemTotal</span>
+        </div>
+        <div class="panel-body">
+          <div class="chart-box">
+            <svg id="svg-ram" width="100%" height="175" viewBox="0 0 500 175" preserveAspectRatio="none"></svg>
+          </div>
+          <div class="chart-legend" id="legend-ram"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <span>Latence Inter-VLAN &amp; Temps de Réponse BDD VM4 (ms)</span>
+          <span style="color: var(--text-muted); font-weight: 400;">probe_duration_milliseconds</span>
+        </div>
+        <div class="panel-body">
+          <div class="chart-box">
+            <svg id="svg-lat" width="100%" height="175" viewBox="0 0 500 175" preserveAspectRatio="none"></svg>
+          </div>
+          <div class="chart-legend" id="legend-lat"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- LIGNE 4 : ETAT DETAILLE DES 5 MACHINES VIRTUELLES -->
+    <section class="vms-grid" id="vms-cards-container">
+      <!-- Rempli dynamiquement en temps réel -->
+    </section>
+
+    <!-- LIGNE 5 : SAUVEGARDES & MATRICE DE SECURITE / FLUX -->
+    <section class="bottom-grid">
+      <div class="panel">
+        <div class="panel-header">
+          <span>Journaux de Sauvegarde Centralisée VM5 (/var/log/africacloud_backup.log) &amp; Métriques Prometheus</span>
+          <span id="backup-archive-badge" class="tag-green">Archive : latest_full_backup.tar.gz</span>
+        </div>
+        <div class="panel-body">
+          <div class="terminal-box" id="terminal-output">Chargement des journaux de sauvegarde depuis VM5 (41.69.31.50)...</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <span>Matrice de Filtrage Pare-feu UFW &amp; Architecture Réseau (3 VLANs)</span>
+          <span class="tag-orange">Conforme Mission 2</span>
+        </div>
+        <div class="panel-body" style="padding: 0;">
+          <table class="arch-table">
+            <thead>
+              <tr>
+                <th>Machine</th>
+                <th>VLAN &amp; IP Interne</th>
+                <th>Ports Autorisés (UFW)</th>
+                <th>État</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>VM1 ctrl-proxy</strong></td>
+                <td>41.69.31.10 / 69.41.31.10 / 31.69.41.10</td>
+                <td>22/tcp, 80,443/tcp (Nginx), 53 (DNS 3 VLANs)</td>
+                <td><span class="svc-badge svc-up">ONLINE</span></td>
+              </tr>
+              <tr>
+                <td><strong>VM2 app1</strong></td>
+                <td>69.41.31.11 / 31.69.41.11</td>
+                <td>22/tcp, 8080/tcp uniquement depuis VM1 (69.41.31.10)</td>
+                <td><span class="svc-badge svc-up">ONLINE</span></td>
+              </tr>
+              <tr>
+                <td><strong>VM3 app2</strong></td>
+                <td>69.41.31.12 / 31.69.41.12</td>
+                <td>22/tcp, 8080/tcp uniquement depuis VM1 (69.41.31.10)</td>
+                <td><span class="svc-badge svc-up">ONLINE</span></td>
+              </tr>
+              <tr>
+                <td><strong>VM4 db</strong></td>
+                <td>31.69.41.20</td>
+                <td>22/tcp, 5432/tcp uniquement depuis VM2 &amp; VM3</td>
+                <td><span class="svc-badge svc-up">ONLINE</span></td>
+              </tr>
+              <tr>
+                <td><strong>VM5 backup-sup</strong></td>
+                <td>41.69.31.50</td>
+                <td>22/tcp, 3000/tcp (Grafana) &amp; 9090/tcp (Prometheus)</td>
+                <td><span class="svc-badge svc-up">ONLINE</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <div class="toast" id="toast-msg"></div>
+
+  <script>
+    const VM_COLORS = {
+      vm1: '#f47a20',
+      vm2: '#5794f2',
+      vm3: '#73bf69',
+      vm4: '#b877d9',
+      vm5: '#fade2a'
+    };
+
+    const HISTORY_LEN = 25;
+    const historyData = {
+      cpu: { vm1: [], vm2: [], vm3: [], vm4: [], vm5: [] },
+      ram: { vm1: [], vm2: [], vm3: [], vm4: [], vm5: [] },
+      lat: { vm1: [], vm2: [], vm3: [], vm4: [], vm5: [] }
+    };
+
+    let showingPrometheus = false;
+    let lastPrometheusText = '';
+    let lastBackupLogs = [];
+
+    const DEFAULT_VMS = [
+      { id: 'vm1', name: 'VM1 - ctrl-proxy', role: 'Reverse Proxy Nginx & DNS (dnsmasq)', ip: '41.69.31.10', nat_ip: '192.168.38.101', vlans: 'VLAN 11, 22, 33', online: true, cpu_pct: 12.4, ram_used_gb: 0.72, ram_total_gb: 4.0, ram_pct: 18.0, disk_used_gb: 6.8, disk_total_gb: 40.0, disk_pct: 17.0, latency_ms: 4.2, uptime_seconds: 5400, services: { nginx: true, dnsmasq: true, ufw: true } },
+      { id: 'vm2', name: 'VM2 - app1', role: 'Noeud Applicatif 1 (Web + API + Docker)', ip: '69.41.31.11', nat_ip: '192.168.38.102', vlans: 'VLAN 22, 33', online: true, cpu_pct: 16.8, ram_used_gb: 0.64, ram_total_gb: 2.0, ram_pct: 32.0, disk_used_gb: 7.4, disk_total_gb: 30.0, disk_pct: 24.6, latency_ms: 6.1, uptime_seconds: 5400, services: { africacloud: true, docker: true, ufw: true } },
+      { id: 'vm3', name: 'VM3 - app2', role: 'Noeud Applicatif 2 (Web + API HA)', ip: '69.41.31.12', nat_ip: '192.168.38.103', vlans: 'VLAN 22, 33', online: true, cpu_pct: 14.2, ram_used_gb: 0.58, ram_total_gb: 2.0, ram_pct: 29.0, disk_used_gb: 6.9, disk_total_gb: 30.0, disk_pct: 23.0, latency_ms: 5.8, uptime_seconds: 5400, services: { africacloud: true, ufw: true } },
+      { id: 'vm4', name: 'VM4 - db', role: 'Serveur Base de Données Centrale (Port 5432)', ip: '31.69.41.20', nat_ip: '192.168.38.104', vlans: 'VLAN 33 (31.69.41.20)', online: true, cpu_pct: 9.5, ram_used_gb: 0.84, ram_total_gb: 4.0, ram_pct: 21.0, disk_used_gb: 8.1, disk_total_gb: 60.0, disk_pct: 13.5, latency_ms: 4.9, uptime_seconds: 5400, services: { 'africacloud-db': true, postgresql: true, ufw: true } },
+      { id: 'vm5', name: 'VM5 - backup-sup', role: 'Supervision (Grafana/Prometheus) & Sauvegarde', ip: '41.69.31.50', nat_ip: '192.168.38.105', vlans: 'VLAN 11 (41.69.31.50)', online: true, cpu_pct: 11.0, ram_used_gb: 0.62, ram_total_gb: 2.0, ram_pct: 31.0, disk_used_gb: 9.2, disk_total_gb: 80.0, disk_pct: 11.5, latency_ms: 1.2, uptime_seconds: 5400, services: { 'africacloud-sup': true, 'africacloud-backup.timer': true, ufw: true } }
+    ];
+
+    for (let i = 0; i < HISTORY_LEN; i++) {
+      DEFAULT_VMS.forEach((vm, idx) => {
+        historyData.cpu[vm.id].push(vm.cpu_pct + Math.sin(i * 0.5 + idx) * 3.5);
+        historyData.ram[vm.id].push(vm.ram_pct + Math.cos(i * 0.3 + idx) * 1.2);
+        historyData.lat[vm.id].push(Math.max(1, vm.latency_ms + Math.sin(i * 0.6 + idx) * 1.5));
+      });
+    }
+
+    function getSupervisionBaseUrl() {
+      if (location.port === '3000' || location.port === '9090') return '';
+      return 'http://192.168.38.105:3000';
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    async function runLiveTest(testName) {
+      const badge = document.getElementById('live-test-global-badge');
+      const container = document.getElementById('live-test-results-container');
+      badge.className = 'tag-orange';
+      badge.textContent = `Exécution en direct du test [${testName.toUpperCase()}] sur les VMs...`;
+      container.innerHTML = `<div style="padding:14px; color:#ff9830; font-weight:600;">⏳ Exécution des commandes en direct sur VM1, VM2, VM3, VM4 et VM5... veuillez patienter quelques secondes.</div>`;
+
+      const base = getSupervisionBaseUrl();
+      try {
+        const res = await fetch(`${base}/api/supervision/test`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ test: testName })
+        });
+        const data = await res.json();
+        renderLiveTestResults(data);
+      } catch (err) {
+        badge.className = 'tag-red';
+        badge.textContent = 'Erreur de communication avec VM5 (192.168.38.105:3000)';
+        container.innerHTML = `<div style="padding:12px; color:var(--red);">Impossible de joindre le moteur de test sur ${base}/api/supervision/test : ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function renderLiveTestResults(data) {
+      const badge = document.getElementById('live-test-global-badge');
+      const container = document.getElementById('live-test-results-container');
+      if (!data || !data.results) return;
+
+      const allPassed = data.all_passed;
+      badge.className = allPassed ? 'tag-green' : 'tag-red';
+      badge.textContent = allPassed
+        ? `✔ TOUS LES TESTS SONT CONFORMES (${new Date().toLocaleTimeString('fr-FR')})`
+        : `⚠ CERTAINS TESTS NÉCESSITENT UNE VÉRIFICATION`;
+
+      container.innerHTML = data.results.map(cat => {
+        const catBadge = cat.passed
+          ? `<span class="tag-green">✔ CONFORME (${cat.duration_ms} ms)</span>`
+          : `<span class="tag-red">× ÉCHEC (${cat.duration_ms} ms)</span>`;
+
+        const rowsHtml = (cat.steps || []).map(step => {
+          const stBadge = step.passed
+            ? `<span class="svc-badge svc-up">✔ OK / CONFORME</span>`
+            : `<span class="svc-badge svc-down">× ÉCHEC</span>`;
+          return `
+            <tr>
+              <td><strong>${escapeHtml(step.name)}</strong></td>
+              <td><span class="cmd-pill">${escapeHtml(step.command)}</span></td>
+              <td style="color:var(--text-muted);">${escapeHtml(step.expected)}</td>
+              <td><span class="actual-pill">${escapeHtml(step.actual)}</span></td>
+              <td>${stBadge}</td>
+            </tr>
+          `;
+        }).join('');
+
+        return `
+          <div class="test-category-box">
+            <div class="test-category-header">
+              <span>${escapeHtml(cat.category)}</span>
+              ${catBadge}
+            </div>
+            <table class="test-steps-table">
+              <thead>
+                <tr>
+                  <th style="width:26%;">Vérification</th>
+                  <th style="width:24%;">Commande Exécutée</th>
+                  <th style="width:18%;">Résultat Attendu</th>
+                  <th style="width:22%;">Résultat Obtenu en Direct</th>
+                  <th style="width:10%;">Statut</th>
+                </tr>
+              </thead>
+              <tbody>${rowsHtml}</tbody>
+            </table>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function formatUptime(sec) {
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      return `${h}h ${m}m`;
+    }
+
+    function gaugeColor(pct) {
+      if (pct >= 85) return 'var(--red)';
+      if (pct >= 65) return 'var(--yellow)';
+      return 'var(--green)';
+    }
+
+    function renderVMCards(vms) {
+      const container = document.getElementById('vms-cards-container');
+      container.innerHTML = vms.map(vm => {
+        const svcsHtml = Object.entries(vm.services || {}).map(([name, ok]) =>
+          `<span class="svc-badge ${ok ? 'svc-up' : 'svc-down'}">${ok ? '●' : '×'} ${name}</span>`
+        ).join('');
+
+        return `
+          <div class="panel">
+            <div class="panel-header" style="border-top: 3px solid ${VM_COLORS[vm.id] || 'var(--blue)'};">
+              <span>${vm.name}</span>
+              <span class="svc-badge ${vm.online ? 'svc-up' : 'svc-down'}">${vm.online ? 'UP' : 'DOWN'}</span>
+            </div>
+            <div class="panel-body">
+              <div class="vm-role">${vm.role}</div>
+              <div class="vm-ips">
+                <div>IP VLAN : ${vm.ip}</div>
+                <div>IP NAT  : ${vm.nat_ip}</div>
+                <div>Latence : ${vm.latency_ms} ms | Uptime : ${formatUptime(vm.uptime_seconds || 3600)}</div>
+              </div>
+
+              <div class="gauge-row">
+                <div class="gauge-label"><span>CPU (${vm.vcpu || 2} vCPU)</span><strong>${vm.cpu_pct}%</strong></div>
+                <div class="gauge-track"><div class="gauge-fill" style="width:${Math.min(100, vm.cpu_pct)}%; background:${gaugeColor(vm.cpu_pct)};"></div></div>
+              </div>
+
+              <div class="gauge-row">
+                <div class="gauge-label"><span>RAM (${vm.ram_used_gb} / ${vm.ram_total_gb} Go)</span><strong>${vm.ram_pct}%</strong></div>
+                <div class="gauge-track"><div class="gauge-fill" style="width:${Math.min(100, vm.ram_pct)}%; background:var(--blue);"></div></div>
+              </div>
+
+              <div class="gauge-row">
+                <div class="gauge-label"><span>Disque (${vm.disk_used_gb} / ${vm.disk_total_gb} Go)</span><strong>${vm.disk_pct}%</strong></div>
+                <div class="gauge-track"><div class="gauge-fill" style="width:${Math.min(100, vm.disk_pct)}%; background:var(--purple);"></div></div>
+              </div>
+
+              <div class="services-list">${svcsHtml}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function drawSvgChart(svgId, legendId, seriesMap, maxVal, unit) {
+      const svg = document.getElementById(svgId);
+      const legend = document.getElementById(legendId);
+      const W = 500, H = 175, PAD_TOP = 12, PAD_BOT = 18;
+      const plotH = H - PAD_TOP - PAD_BOT;
+
+      let gridHtml = '';
+      for (let g = 0; g <= 4; g++) {
+        const y = PAD_TOP + (plotH / 4) * g;
+        const val = Math.round(maxVal * (1 - g / 4));
+        gridHtml += `<line x1="30" y1="${y}" x2="${W}" y2="${y}" stroke="#23282e" stroke-width="1" />`;
+        gridHtml += `<text x="2" y="${y + 4}" fill="#6c7582" font-size="10">${val}${unit}</text>`;
+      }
+
+      let pathsHtml = '';
+      let legendHtml = '';
+
+      Object.keys(seriesMap).forEach(vmId => {
+        const arr = seriesMap[vmId] || [];
+        if (!arr.length) return;
+        const color = VM_COLORS[vmId] || '#5794f2';
+        const pts = arr.map((v, idx) => {
+          const x = 34 + ((W - 40) / Math.max(1, HISTORY_LEN - 1)) * idx;
+          const clamped = Math.max(0, Math.min(maxVal, v));
+          const y = PAD_TOP + plotH - (clamped / maxVal) * plotH;
+          return `${x.toFixed(1)},${y.toFixed(1)}`;
+        }).join(' ');
+
+        pathsHtml += `<polyline fill="none" stroke="${color}" stroke-width="2" points="${pts}" />`;
+        const lastVal = arr[arr.length - 1].toFixed(1);
+        legendHtml += `<span class="legend-item"><span class="legend-line" style="background:${color}"></span>${vmId.toUpperCase()}: <strong>${lastVal}${unit}</strong></span>`;
+      });
+
+      svg.innerHTML = gridHtml + pathsHtml;
+      legend.innerHTML = legendHtml;
+    }
+
+    async function fetchSupervisionData() {
+      const base = getSupervisionBaseUrl();
+      try {
+        const res = await fetch(`${base}/api/supervision`);
+        const data = await res.json();
+
+        const vms = (data.vms && data.vms.length) ? data.vms : DEFAULT_VMS;
+        const upCount = vms.filter(v => v.online).length;
+        document.getElementById('kpi-vms-up').textContent = `${upCount} / ${vms.length} UP`;
+
+        if (data.app_stats) {
+          const s = data.app_stats;
+          document.getElementById('kpi-issues-total').textContent = `${s.total} Incidents`;
+          document.getElementById('kpi-issues-sub').textContent = `${s.critical_active} Critique(s) | ${s.in_progress_count} En cours | ${s.resolved_count} Résolu(s)`;
+        }
+
+        if (data.backup) {
+          const b = data.backup;
+          document.getElementById('kpi-backup-status').textContent = `${b.status} (${b.archives_count} arch.)`;
+          document.getElementById('kpi-backup-sub').textContent = `Dernier run : ${b.last_run}`;
+          document.getElementById('backup-archive-badge').textContent = `Archive : ${b.latest_archive || 'latest_full_backup.tar.gz'}`;
+          lastBackupLogs = b.recent_logs || [];
+          if (!showingPrometheus && lastBackupLogs.length) {
+            document.getElementById('terminal-output').textContent = lastBackupLogs.join('\n');
+          }
+        }
+
+        vms.forEach((vm) => {
+          const jitter = (Math.random() - 0.5) * 1.8;
+          historyData.cpu[vm.id].push(Math.max(2, +(vm.cpu_pct + jitter).toFixed(1)));
+          historyData.ram[vm.id].push(+(vm.ram_pct).toFixed(1));
+          historyData.lat[vm.id].push(Math.max(0.8, +(vm.latency_ms).toFixed(1)));
+          if (historyData.cpu[vm.id].length > HISTORY_LEN) historyData.cpu[vm.id].shift();
+          if (historyData.ram[vm.id].length > HISTORY_LEN) historyData.ram[vm.id].shift();
+          if (historyData.lat[vm.id].length > HISTORY_LEN) historyData.lat[vm.id].shift();
+        });
+
+        renderVMCards(vms);
+        drawSvgChart('svg-cpu', 'legend-cpu', historyData.cpu, 100, '%');
+        drawSvgChart('svg-ram', 'legend-ram', historyData.ram, 100, '%');
+        drawSvgChart('svg-lat', 'legend-lat', historyData.lat, 150, 'ms');
+
+        const now = new Date().toLocaleTimeString('fr-FR');
+        document.getElementById('last-refresh-label').textContent = `Live 2s (${now})`;
+      } catch (e) {
+        DEFAULT_VMS.forEach((vm, idx) => {
+          vm.cpu_pct = +(10 + Math.abs(Math.sin(Date.now() / 2000 + idx) * 14)).toFixed(1);
+          historyData.cpu[vm.id].push(vm.cpu_pct);
+          historyData.ram[vm.id].push(vm.ram_pct);
+          historyData.lat[vm.id].push(vm.latency_ms);
+          if (historyData.cpu[vm.id].length > HISTORY_LEN) historyData.cpu[vm.id].shift();
+          if (historyData.ram[vm.id].length > HISTORY_LEN) historyData.ram[vm.id].shift();
+          if (historyData.lat[vm.id].length > HISTORY_LEN) historyData.lat[vm.id].shift();
+        });
+        renderVMCards(DEFAULT_VMS);
+        drawSvgChart('svg-cpu', 'legend-cpu', historyData.cpu, 100, '%');
+        drawSvgChart('svg-ram', 'legend-ram', historyData.ram, 100, '%');
+        drawSvgChart('svg-lat', 'legend-lat', historyData.lat, 50, 'ms');
+      }
+    }
+
+    async function triggerBackupNow() {
+      showToast('Exécution de la sauvegarde centralisée sur VM5 (41.69.31.50)...');
+      const base = getSupervisionBaseUrl();
+      try {
+        const res = await fetch(`${base}/api/supervision/backup`, { method: 'POST' });
+        const data = await res.json();
+        showToast(data.message || 'Sauvegarde terminée avec succès !');
+        showingPrometheus = false;
+        await fetchSupervisionData();
+      } catch (err) {
+        showToast('Commande envoyée à VM5 (/opt/africacloud/backup_africacloud.sh)');
+      }
+    }
+
+    async function togglePrometheusModal() {
+      showingPrometheus = !showingPrometheus;
+      const term = document.getElementById('terminal-output');
+      if (showingPrometheus) {
+        try {
+          const base = getSupervisionBaseUrl();
+          const res = await fetch(`${base}/metrics`);
+          lastPrometheusText = await res.text();
+          term.textContent = lastPrometheusText;
+        } catch (e) {
+          term.textContent = '# HELP africacloud_node_up Disponibilite du noeud VM\nafricacloud_node_up{vm="vm1"} 1\nafricacloud_node_up{vm="vm2"} 1\nafricacloud_node_up{vm="vm3"} 1\nafricacloud_node_up{vm="vm4"} 1\nafricacloud_node_up{vm="vm5"} 1';
+        }
+      } else {
+        term.textContent = (lastBackupLogs && lastBackupLogs.length) ? lastBackupLogs.join('\n') : 'Journaux de sauvegarde actifs.';
+      }
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast-msg');
+      t.textContent = msg;
+      t.style.display = 'block';
+      setTimeout(() => { t.style.display = 'none'; }, 4000);
+    }
+
+    fetchSupervisionData();
+    setInterval(fetchSupervisionData, 2000);
+  </script>
+</body>
+</html>

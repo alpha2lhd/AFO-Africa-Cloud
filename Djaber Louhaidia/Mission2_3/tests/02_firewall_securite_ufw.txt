@@ -1,0 +1,107 @@
+================================================================================
+TEST 02 - PARE-FEU (UFW), REGLES DE FILTRAGE & SECURITE
+================================================================================
+
+--------------------------------------------------------------------------------
+1. VERIFICATION DES REGLES UFW SUR CHAQUE VM
+--------------------------------------------------------------------------------
+[Où exécuter] : Sur chaque VM (VM1, VM2, VM3, VM4, VM5)
+[Commande]    :
+  sudo ufw status verbose
+  sudo ufw status numbered
+
+[Résultat attendu par VM] :
+  Politique par défaut sur les 5 VMs : Default: deny (incoming), allow (outgoing)
+
+  - VM1 (ctrl-proxy) :
+      *Default: deny (incoming), allow (outgoing), allow (routed)*
+      22/tcp (OpenSSH)           ALLOW IN    Anywhere
+      80,443/tcp                 ALLOW IN    Anywhere
+      53                         ALLOW IN    41.69.31.0/24
+      53                         ALLOW IN    69.41.31.0/24
+      53                         ALLOW IN    31.69.41.0/24
+
+  - VM2 (app1) & VM3 (app2) :
+      22/tcp (OpenSSH)           ALLOW IN    Anywhere
+      8080/tcp                   ALLOW IN    69.41.31.10 (depuis VM1 ctrl-proxy)
+      8080,80,3000/tcp           ALLOW IN    192.168.38.1 (depuis PC Hôte Windows NAT uniquement)
+      (Tout accès depuis VM5 41.69.31.50 ou autre sous-réseau est BLOQUÉ)
+
+  - VM4 (db) :
+      22/tcp (OpenSSH)           ALLOW IN    Anywhere
+      5432/tcp                   ALLOW IN    31.69.41.11 (depuis VM2)
+      5432/tcp                   ALLOW IN    31.69.41.12 (depuis VM3)
+
+  - VM5 (backup-sup) :
+      22/tcp (OpenSSH)           ALLOW IN    Anywhere
+      3000,9090/tcp              ALLOW IN    41.69.31.10 (uniquement depuis VM1)
+
+
+--------------------------------------------------------------------------------
+2. TESTS DE FLUX BLOQUES PAR LE PARE-FEU (ATTENDU : TIMEOUT)
+--------------------------------------------------------------------------------
+Principe de sécurité : VM5 (VLAN 11) ne doit PAS pouvoir accéder directement
+à la Base de Données (VM4:5432) ni aux serveurs applicatifs (VM2/VM3:8080).
+
+[Où exécuter] : Sur VM5 (backup-sup - 192.168.38.105)
+[Commandes]   :
+  nc -zv -w 3 31.69.41.20 5432
+  nc -zv -w 3 69.41.31.11 8080
+  nc -zv -w 3 69.41.31.12 8080
+
+[Résultat attendu] :
+  nc: connect to 31.69.41.20 port 5432 (tcp) timed out: Operation now in progress
+  nc: connect to 69.41.31.11 port 8080 (tcp) timed out: Operation now in progress
+  nc: connect to 69.41.31.12 port 8080 (tcp) timed out: Operation now in progress
+  (Note : "timed out" prouve que le paquet est rejeté silencieusement/DROP par UFW).
+
+
+--------------------------------------------------------------------------------
+3. TESTS DE FLUX AUTORISES PAR LE PARE-FEU (ATTENDU : SUCCEEDED)
+--------------------------------------------------------------------------------
+A) Depuis VM1 (ctrl-proxy) vers les serveurs applicatifs VM2 et VM3 (port 8080) :
+[Où exécuter] : Sur VM1 (ctrl-proxy - 192.168.38.101)
+[Commandes]   :
+  nc -zv -w 3 69.41.31.11 8080
+  nc -zv -w 3 69.41.31.12 8080
+[Résultat attendu] :
+  Connection to 69.41.31.11 8080 port [tcp/http-alt] succeeded!
+  Connection to 69.41.31.12 8080 port [tcp/http-alt] succeeded!
+
+B) Depuis VM2 et VM3 vers la Base de Données VM4 (port 5432) :
+[Où exécuter] : Sur VM2 (192.168.38.102) et VM3 (192.168.38.103)
+[Commande]    :
+  nc -zv -w 3 31.69.41.20 5432
+[Résultat attendu] :
+  Connection to 31.69.41.20 5432 port [tcp/postgresql] succeeded!
+  (Note : si PostgreSQL n'est pas démarré sur VM4, le message "Connection refused"
+   prouve quand même que le pare-feu laisse passer le paquet ; on peut ouvrir un port
+   de test sur VM4 avec `nc -l 5432` pour obtenir "succeeded!").
+
+
+--------------------------------------------------------------------------------
+4. VERIFICATION DE LA SECURITE SYSTEME & APPLICATIVE
+--------------------------------------------------------------------------------
+A) Vérification de la protection contre la traversée de répertoires (Path Traversal) :
+[Où exécuter] : Depuis VM1 ou le PC Hôte Windows
+[Commande]    :
+  curl -i --path-as-is http://192.168.38.102:8080/../../etc/passwd
+[Résultat attendu] :
+  HTTP/1.0 403 Forbidden (ou 404 Not Found) -> l'application bloque tout accès hors de /public.
+
+B) Vérification des journaux de blocage du pare-feu UFW :
+[Où exécuter] : Sur VM4 (db) ou VM2 (app1) après un test bloqué depuis VM5
+[Commande]    :
+  sudo dmesg | grep -i "\[UFW BLOCK\]" | tail -n 5
+[Résultat attendu] :
+  Affiche les lignes [UFW BLOCK] avec SRC=41.69.31.50 (VM5) et DPT=5432 ou DPT=8080.
+
+C) Vérification des connexions SSH et des droits sudo :
+[Où exécuter] : Sur n'importe quelle VM
+[Commandes]   :
+  systemctl is-active ssh
+  last -n 5
+[Résultat attendu] :
+  - Service SSH "active"
+  - Historique des connexions de l'administrateur `acadmin`.
+================================================================================

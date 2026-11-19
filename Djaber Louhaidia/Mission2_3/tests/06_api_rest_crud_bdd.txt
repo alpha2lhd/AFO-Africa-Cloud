@@ -1,0 +1,125 @@
+================================================================================
+TEST 06 - API REST (CRUD COMPLET) & BASE DE DONNEES (SQLITE / POSTGRESQL)
+================================================================================
+
+--------------------------------------------------------------------------------
+1. TEST GET /api/stats (STATISTIQUES TEMPS REEL DES INCIDENTS)
+--------------------------------------------------------------------------------
+[Où exécuter] : Depuis VM1 (sur 69.41.31.11:8080) ou depuis Windows (192.168.38.102:8080)
+[Commande]    :
+  curl -s http://192.168.38.102:8080/api/stats
+
+[Résultat attendu] :
+  Code HTTP 200 + JSON contenant les compteurs calculés depuis la BDD :
+  {
+    "total": 3,
+    "open_count": 1,
+    "in_progress_count": 1,
+    "resolved_count": 1,
+    "critical_active": 1,
+    "served_by_node": "VM2 app1 : 69.41.31.11 / 31.69.41.11 (NAT 192.168.38.102)"
+  }
+
+
+--------------------------------------------------------------------------------
+2. TEST GET /api/issues (LECTURE DE TOUS LES INCIDENTS TECHNIQUES)
+--------------------------------------------------------------------------------
+[Où exécuter] : Depuis VM1 ou depuis Windows
+[Commandes]   :
+  curl -s http://192.168.38.102:8080/api/issues
+  curl -s "http://192.168.38.102:8080/api/issues?status=Ouvert"
+
+[Résultat attendu] :
+  Code HTTP 200 + Tableau JSON listant tous les incidents stockés dans `africacloud.db`
+  (avec `id`, `title`, `category`, `priority`, `reporter`, `description`, `status`, `created_at`).
+
+
+--------------------------------------------------------------------------------
+3. TEST POST /api/issues (CREATION D'UN NOUVEL INCIDENT EN BASE DE DONNEES)
+--------------------------------------------------------------------------------
+[Où exécuter] : Depuis une VM Linux (VM1/VM2) en Bash
+[Commande]    :
+  curl -i -X POST http://192.168.38.102:8080/api/issues \
+    -H "Content-Type: application/json" \
+    -d '{"title":"Test Jury ASO 2026","category":"Réseau / VLAN","priority":"Critique","reporter":"Jury","description":"Vérification insertion en base via API REST"}'
+
+[Résultat attendu] :
+  Code HTTP 201 Created + Objet JSON du nouvel incident créé avec son `id` auto-incrémenté
+  (ex: `"id": 4`, `"status": "Ouvert"`, `"created_at": "..."`).
+
+
+--------------------------------------------------------------------------------
+4. TEST PUT /api/issues/<id> (MISE A JOUR DU STATUT D'UN INCIDENT)
+--------------------------------------------------------------------------------
+[Où exécuter] : Depuis une VM Linux (VM1/VM2) en Bash
+[Commande]    :
+  curl -i -X PUT http://192.168.38.102:8080/api/issues/1 \
+    -H "Content-Type: application/json" \
+    -d '{"status":"Résolu"}'
+
+[Résultat attendu] :
+  Code HTTP 200 OK + Objet JSON de l'incident #1 mis à jour avec `"status": "Résolu"`.
+
+
+--------------------------------------------------------------------------------
+5. TEST DELETE /api/issues/<id> (SUPPRESSION D'UN INCIDENT)
+--------------------------------------------------------------------------------
+[Où exécuter] : Depuis une VM Linux (VM1/VM2) en Bash
+[Commande]    :
+  curl -i -X DELETE http://192.168.38.102:8080/api/issues/4
+
+[Résultat attendu] :
+  Code HTTP 200 OK :
+  {
+    "message": "Incident #4 supprimé",
+    "id": 4
+  }
+
+
+--------------------------------------------------------------------------------
+6. VERIFICATION DIRECTE DANS LA BASE DE DONNEES SQLITE (SUR VM2 / VM3)
+--------------------------------------------------------------------------------
+[Où exécuter] : Sur VM2 (app1 - 192.168.38.102) ou VM3 (app2 - 192.168.38.103)
+[Commande]    :
+  python3 -c "import sqlite3; conn=sqlite3.connect('/opt/africacloud/africacloud.db'); [print(dict(r)) for r in conn.execute('SELECT id, title, priority, status, created_at FROM issues').fetchall()]"
+
+  (Ou avec le client sqlite3 s'il est installé) :
+  sqlite3 -header -column /opt/africacloud/africacloud.db "SELECT id, title, category, priority, status FROM issues;"
+
+[Résultat attendu] :
+  Affiche directement les lignes enregistrées dans le fichier `/opt/africacloud/africacloud.db`,
+  confirmant la persistance des modifications effectuées via l'interface Web ou l'API REST.
+
+
+--------------------------------------------------------------------------------
+7. VERIFICATION DU SERVEUR DE BDD CENTRALISE SUR VM4 (31.69.41.20:5432) & SYNC TEMPS REEL
+--------------------------------------------------------------------------------
+A) Vérifier le service BDD sur VM4 (port 5432) :
+[Où exécuter] : Sur VM4 (db - 192.168.38.104)
+[Commandes]   :
+  systemctl is-active africacloud-db
+  systemctl is-active postgresql
+  sudo ss -tulpn | grep 5432
+  python3 -c "import sqlite3; conn=sqlite3.connect('/opt/africacloud/africacloud.db'); print(conn.execute('SELECT id, title, status FROM issues').fetchall())"
+
+[Résultat attendu] :
+  - Services `africacloud-db` (et alias `postgresql`) à l'état `active`
+  - Port `5432` en écoute sur `0.0.0.0:5432` (`31.69.41.20:5432`)
+  - Affiche tous les incidents stockés dans la base centrale `/opt/africacloud/africacloud.db` sur VM4.
+
+B) Tester la synchronisation temps réel entre VM2 (app1) et VM3 (app2) via VM4 :
+[Où exécuter] : Depuis VM1 (ou depuis le navigateur / terminal Windows)
+[Commandes]   :
+  # 1. Créer un incident sur VM2 (192.168.38.102:8080)
+  curl -s -X POST http://192.168.38.102:8080/api/issues \
+    -H "Content-Type: application/json" \
+    -d '{"title":"Test Sync Temps Reel","category":"Réseau / VLAN","priority":"Haute","reporter":"Jury","description":"Créé sur VM2, lu sur VM3"}'
+
+  # 2. Vérifier qu'il apparaît immédiatement sur VM3 (192.168.38.103:8080)
+  curl -s http://192.168.38.103:8080/api/issues
+
+[Résultat attendu] :
+  L'incident créé sur VM2 (`192.168.38.102:8080`) est instantanément visible sur VM3 (`192.168.38.103:8080`)
+  et sur le Load Balancer VM1 (`192.168.38.101`), car les deux nœuds applicatifs interrogent
+  en temps réel la base centrale hébergée sur VM4 (`31.69.41.20:5432`).
+================================================================================

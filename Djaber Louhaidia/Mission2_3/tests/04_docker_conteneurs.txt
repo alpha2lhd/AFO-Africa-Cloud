@@ -1,0 +1,79 @@
+================================================================================
+TEST 04 - DOCKER, DOCKERFILE, DOCKER COMPOSE & CONTENEURS
+================================================================================
+
+--------------------------------------------------------------------------------
+1. VERIFICATION DE L'INSTALLATION DOCKER & DU SERVICE DOCKER
+--------------------------------------------------------------------------------
+[Où exécuter] : Sur VM2 (app1 - 192.168.38.102) et VM3 (app2 - 192.168.38.103)
+[Commandes]   :
+  docker --version
+  systemctl is-active docker
+
+[Résultat attendu] :
+  - Affiche la version de Docker installée (ex: Docker version 24.x / 26.x / 27.x)
+  - "active"
+
+
+--------------------------------------------------------------------------------
+2. VERIFICATION DU DOCKERFILE & DU DOCKER-COMPOSE.YML
+--------------------------------------------------------------------------------
+[Où exécuter] : Sur VM2 (app1) ou VM3 (app2) (ou dans le dossier Windows Mission2_3)
+[Commandes]   :
+  cat /opt/africacloud/Dockerfile
+  cat /opt/africacloud/docker-compose.yml
+
+[Résultat attendu] :
+  - Le Dockerfile utilise `FROM python:3.12-slim`, copie `server.py`, `schema.sql` et
+    `public/`, expose les ports `8080 80 3000`, définit un `HEALTHCHECK` sur `/api/health`
+    et lance `CMD ["python3", "server.py"]`.
+  - Le docker-compose.yml définit le service `africacloud-app`, l'image
+    `africacloud-incidents:1.0`, la politique `restart: always`, le volume persistant
+    `./africacloud.db:/app/africacloud.db` et le healthcheck automatique.
+
+
+--------------------------------------------------------------------------------
+3. VERIFICATION DES CONTENEURS ACTIFS & DES IMAGES DOCKER
+--------------------------------------------------------------------------------
+[Où exécuter] : Sur VM2 (app1 - 192.168.38.102) et VM3 (app2 - 192.168.38.103)
+[Commandes]   :
+  sudo docker ps
+  sudo docker images
+
+[Résultat attendu] :
+  - `sudo docker ps` affiche le conteneur actif (ex: `web` ou `africacloud-app`) avec
+    son statut `Up ...` et les ports exposés (`8080/tcp`).
+  - `sudo docker images` affiche les images présentes sur le nœud.
+
+
+--------------------------------------------------------------------------------
+4. VERIFICATION DE LA POLITIQUE DE REDEMARRAGE AUTOMATIQUE (RESTART POLICY)
+--------------------------------------------------------------------------------
+[Où exécuter] : Sur VM2 (app1) et VM3 (app2)
+[Commande]    :
+  sudo docker inspect -f '{{.Name}} -> RestartPolicy: {{.HostConfig.RestartPolicy.Name}}' $(sudo docker ps -q)
+
+[Résultat attendu] :
+  Affiche `RestartPolicy: unless-stopped` ou `RestartPolicy: always` (garantit que
+  si le conteneur plante ou si la VM redémarre, Docker relance automatiquement le service).
+
+
+--------------------------------------------------------------------------------
+5. CONSTRUCTION & LANCEMENT DU CONTENEUR AFRICACLOUD AVEC DOCKER COMPOSE
+--------------------------------------------------------------------------------
+(Note : Si le service tourne via systemd `africacloud.service` sur le port 8080,
+ arrêter d'abord systemd avec `sudo systemctl stop africacloud` avant de lancer
+ le conteneur sur le même port, ou inversement).
+
+[Où exécuter] : Sur VM2 (app1) ou VM3 (app2) dans `/opt/africacloud`
+[Commandes]   :
+  cd /opt/africacloud
+  sudo docker build -t africacloud-incidents:1.0 .
+  sudo docker compose up -d
+  sudo docker ps
+  sudo docker logs --tail 20 africacloud-app
+
+[Résultat attendu] :
+  - Image `africacloud-incidents:1.0` construite avec succès.
+  - Conteneur `africacloud-app` démarré avec le statut `Up (healthy)`.
+================================================================================
